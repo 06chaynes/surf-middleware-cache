@@ -61,7 +61,7 @@ fn req_key(req: &Request) -> String {
 
 #[allow(dead_code)]
 impl CACacheManager {
-    async fn clear(&self) -> Result<()> {
+    pub async fn clear(&self) -> Result<()> {
         cacache::clear(&self.path).await?;
         Ok(())
     }
