@@ -90,7 +90,7 @@ impl CacheManager for CACacheManager {
         let bytes = bincode::serialize(&data).unwrap();
         cacache::write(&self.path, &req_key(req), bytes).await?;
         let mut ret_res = http_types::Response::new(res.status());
-        ret_res.set_body(res.body_bytes().await?);
+        ret_res.set_body(data.response.body);
         for header in res.iter() {
             ret_res.insert_header(header.0, header.1);
         }
