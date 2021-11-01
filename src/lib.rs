@@ -1,6 +1,6 @@
 use std::{str::FromStr, time::SystemTime};
 
-use http_cache_semantics::CachePolicy;
+use http_cache_semantics::{AfterResponse, BeforeRequest, CachePolicy};
 use http_types::{headers::HeaderValue, Method};
 use surf::{
     middleware::{Middleware, Next},
@@ -57,7 +57,7 @@ impl<T: CacheManager> Cache<T> {
         }
 
         if let Some(store) = self.cache_manager.get(&req).await? {
-            let (mut res, mut policy) = store;
+            let (mut res, policy) = store;
             if let Some(warning_code) = get_warning_code(&res) {
                 // https://tools.ietf.org/html/rfc7234#section-4.3.4
                 //
@@ -74,9 +74,7 @@ impl<T: CacheManager> Cache<T> {
                 }
             }
 
-            if self.mode == CacheMode::Default && !is_stale(&req, &res) {
-                Ok(res)
-            } else if self.mode == CacheMode::Default {
+            if self.mode == CacheMode::Default {
                 Ok(self
                     .conditional_fetch(req, res, policy, client, next)
                     .await?)
@@ -85,10 +83,7 @@ impl<T: CacheManager> Cache<T> {
                 // SHOULD be included if the cache is intentionally disconnected from
                 // the rest of the network for a period of time.
                 // (https://tools.ietf.org/html/rfc2616#section-14.46)
-                res.append_header(
-                    "Warning",
-                    build_warning(req.url(), 112, "Disconnected operation"),
-                );
+                add_warning(&mut res, req.url(), 112, "Disconnected operation");
                 Ok(res)
             } else {
                 Ok(self.remote_fetch(req, client, next).await?)
@@ -110,7 +105,21 @@ impl<T: CacheManager> Cache<T> {
         client: Client,
         next: Next<'_>,
     ) -> Result<Response, http_types::Error> {
-        set_revalidation_headers(&mut req);
+        let before_req = policy.before_request(&get_request_parts(&req), SystemTime::now());
+        match before_req {
+            BeforeRequest::Fresh(parts) => {
+                update_response_headers(parts, &mut cached_res)?;
+                return Ok(cached_res);
+            }
+            BeforeRequest::Stale {
+                request: parts,
+                matches,
+            } => {
+                if matches {
+                    update_request_headers(parts, &mut req)?;
+                }
+            }
+        }
         let copied_req = req.clone();
         match self.remote_fetch(req, client, next).await {
             Ok(cond_res) => {
@@ -120,9 +129,11 @@ impl<T: CacheManager> Cache<T> {
                     //   because an attempt to revalidate the response failed,
                     //   due to an inability to reach the server.
                     // (https://tools.ietf.org/html/rfc2616#section-14.46)
-                    cached_res.append_header(
-                        "Warning",
-                        build_warning(copied_req.url(), 111, "Revalidation failed"),
+                    add_warning(
+                        &mut cached_res,
+                        copied_req.url(),
+                        111,
+                        "Revalidation failed",
                     );
                     Ok(cached_res)
                 } else if cond_res.status() == http_types::StatusCode::NotModified {
@@ -130,9 +141,23 @@ impl<T: CacheManager> Cache<T> {
                     for (key, value) in cond_res.iter() {
                         res.append_header(key, value.clone().as_str());
                     }
-                    // TODO - set headers to revalidated response headers? Needs http-cache-semantics.
                     res.set_body(cached_res.body_string().await?);
                     let mut converted = Response::from(res);
+                    let after_res = policy.after_response(
+                        &get_request_parts(&copied_req),
+                        &get_response_parts(&cond_res),
+                        SystemTime::now(),
+                    );
+                    match after_res {
+                        AfterResponse::Modified(new_policy, parts) => {
+                            policy = new_policy;
+                            update_response_headers(parts, &mut converted)?;
+                        }
+                        AfterResponse::NotModified(new_policy, parts) => {
+                            policy = new_policy;
+                            update_response_headers(parts, &mut converted)?;
+                        }
+                    }
                     let res = self
                         .cache_manager
                         .put(&copied_req, &mut converted, policy)
@@ -151,9 +176,11 @@ impl<T: CacheManager> Cache<T> {
                     //   because an attempt to revalidate the response failed,
                     //   due to an inability to reach the server.
                     // (https://tools.ietf.org/html/rfc2616#section-14.46)
-                    cached_res.append_header(
-                        "Warning",
-                        build_warning(copied_req.url(), 111, "Revalidation failed"),
+                    add_warning(
+                        &mut cached_res,
+                        copied_req.url(),
+                        111,
+                        "Revalidation failed",
                     );
                     //   199 Miscellaneous warning
                     //   The warning text MAY include arbitrary information to
@@ -161,15 +188,12 @@ impl<T: CacheManager> Cache<T> {
                     //   receiving this warning MUST NOT take any automated
                     //   action, besides presenting the warning to the user.
                     // (https://tools.ietf.org/html/rfc2616#section-14.46)
-                    cached_res.append_header(
-                        "Warning",
-                        build_warning(
-                            copied_req.url(),
-                            199,
-                            format!("Miscellaneous Warning {}", e).as_str(),
-                        ),
+                    add_warning(
+                        &mut cached_res,
+                        copied_req.url(),
+                        199,
+                        format!("Miscellaneous Warning {}", e).as_str(),
                     );
-
                     Ok(cached_res)
                 }
             }
@@ -186,13 +210,12 @@ impl<T: CacheManager> Cache<T> {
         let mut res = next.run(req, client).await?;
         let is_method_get_head =
             copied_req.method() == Method::Get || copied_req.method() == Method::Head;
+        let policy = CachePolicy::new(&get_request_parts(&copied_req), &get_response_parts(&res));
         let is_cacheable = self.mode != CacheMode::NoStore
             && is_method_get_head
             && res.status() == http_types::StatusCode::Ok
-            && is_storable(&copied_req, &res);
+            && policy.is_storable();
         if is_cacheable {
-            let policy =
-                CachePolicy::new(&get_request_parts(&copied_req), &get_response_parts(&res));
             Ok(self
                 .cache_manager
                 .put(&copied_req, &mut res, policy)
@@ -214,11 +237,6 @@ fn must_revalidate(res: &Response) -> bool {
     }
 }
 
-fn set_revalidation_headers(mut _req: &Request) {
-    // TODO - need http-cache-semantics to do this.
-    unimplemented!()
-}
-
 fn get_warning_code(res: &Response) -> Option<usize> {
     res.header("Warning").and_then(|hdr| {
         hdr.as_str()
@@ -230,12 +248,30 @@ fn get_warning_code(res: &Response) -> Option<usize> {
     })
 }
 
-fn is_stale(req: &Request, res: &Response) -> bool {
-    CachePolicy::new(&get_request_parts(req), &get_response_parts(res)).is_stale(SystemTime::now())
+fn update_request_headers(
+    parts: http::request::Parts,
+    req: &mut Request,
+) -> Result<(), http_types::Error> {
+    for header in parts.headers.iter() {
+        req.set_header(
+            header.0.as_str(),
+            http_types::headers::HeaderValue::from_str(header.1.to_str()?)?,
+        );
+    }
+    Ok(())
 }
 
-fn is_storable(req: &Request, res: &Response) -> bool {
-    CachePolicy::new(&get_request_parts(req), &get_response_parts(res)).is_storable()
+fn update_response_headers(
+    parts: http::response::Parts,
+    res: &mut Response,
+) -> Result<(), http_types::Error> {
+    for header in parts.headers.iter() {
+        res.insert_header(
+            header.0.as_str(),
+            http_types::headers::HeaderValue::from_str(header.1.to_str()?)?,
+        );
+    }
+    Ok(())
 }
 
 // Convert the surf::Response for CachePolicy to use
@@ -257,16 +293,16 @@ pub fn get_response_parts(res: &Response) -> http::response::Parts {
 }
 
 // Convert the surf::Request for CachePolicy to use
-pub fn get_request_parts(res: &Request) -> http::request::Parts {
+pub fn get_request_parts(req: &Request) -> http::request::Parts {
     let mut headers = http::HeaderMap::new();
-    for header in res.iter() {
+    for header in req.iter() {
         headers.insert(
             http::header::HeaderName::from_str(header.0.as_str()).expect("Invalid header name"),
             http::HeaderValue::from_str(header.1.as_str()).expect("Invalid header value"),
         );
     }
-    let uri = http::Uri::from_str(res.url().as_str()).expect("Invalid request uri");
-    let method = http::Method::from_str(res.method().as_ref()).expect("Invalid request method");
+    let uri = http::Uri::from_str(req.url().as_str()).expect("Invalid request uri");
+    let method = http::Method::from_str(req.method().as_ref()).expect("Invalid request method");
     let mut converted = http::request::Request::new(());
     converted.headers_mut().clone_from(&headers);
     converted.uri_mut().clone_from(&uri);
@@ -275,7 +311,7 @@ pub fn get_request_parts(res: &Request) -> http::request::Parts {
     parts.0
 }
 
-fn build_warning(uri: &surf::http::Url, code: usize, message: &str) -> HeaderValue {
+fn add_warning(res: &mut Response, uri: &surf::http::Url, code: usize, message: &str) {
     //   Warning    = "Warning" ":" 1#warning-value
     // warning-value = warn-code SP warn-agent SP warn-text [SP warn-date]
     // warn-code  = 3DIGIT
@@ -286,7 +322,7 @@ fn build_warning(uri: &surf::http::Url, code: usize, message: &str) -> HeaderVal
     // warn-date  = <"> HTTP-date <">
     // (https://tools.ietf.org/html/rfc2616#section-14.46)
     //
-    HeaderValue::from_str(
+    let val = HeaderValue::from_str(
         format!(
             "{} {} {:?} \"{}\"",
             code,
@@ -296,7 +332,8 @@ fn build_warning(uri: &surf::http::Url, code: usize, message: &str) -> HeaderVal
         )
         .as_str(),
     )
-    .expect("Failed to generate warning string")
+    .expect("Failed to generate warning string");
+    res.append_header("Warning", val);
 }
 
 #[surf::utils::async_trait]
@@ -321,9 +358,9 @@ mod tests {
     #[async_std::test]
     async fn can_get_warning_code() -> Result<()> {
         let url = surf::http::Url::from_str("https://example.com")?;
-        let mut res = Response::new(StatusCode::Ok);
-        res.append_header("Warning", build_warning(&url, 111, "Revalidation failed"));
-        let code = get_warning_code(&res.into()).unwrap();
+        let mut res = surf::Response::from(Response::new(StatusCode::Ok));
+        add_warning(&mut res, &url, 111, "Revalidation failed");
+        let code = get_warning_code(&res).unwrap();
         Ok(assert_eq!(code, 111))
     }
 
