@@ -9,7 +9,7 @@ use surf::{Request, Response};
 type Result<T> = std::result::Result<T, http_types::Error>;
 
 pub struct CACacheManager {
-    path: String,
+    pub path: String,
 }
 
 impl Default for CACacheManager {
