@@ -69,6 +69,7 @@ impl<T: CacheManager> Cache<T> {
                 // * retain any Warning header fields in the stored response with
                 //   warn-code 2xx;
                 //
+                #[allow(clippy::manual_range_contains)]
                 if warning_code >= 100 && warning_code < 200 {
                     res.remove_header("Warning");
                 }
