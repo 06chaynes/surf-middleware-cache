@@ -37,8 +37,8 @@ pub enum CacheMode {
 /// Caches requests according to http spec
 #[derive(Debug)]
 pub struct Cache<T: CacheManager> {
-    mode: CacheMode,
-    cache_manager: T,
+    pub mode: CacheMode,
+    pub cache_manager: T,
 }
 
 impl<T: CacheManager> Cache<T> {
@@ -344,7 +344,7 @@ impl<T: CacheManager + 'static + Send + Sync> Middleware for Cache<T> {
         client: Client,
         next: Next<'_>,
     ) -> Result<Response, http_types::Error> {
-        let res = next.run(req, client).await?;
+        let res = self.run(req, client, next).await?;
         Ok(res)
     }
 }
