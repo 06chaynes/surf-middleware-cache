@@ -1,7 +1,7 @@
 [package]
 name = "surf-middleware-cache"
 description = "A caching middleware for Surf"
-version = "0.2.0"
+version = "0.1.0"
 authors = ["Kat Marchán <kzm@zkat.tech>", "Christian Haynes <06chaynes@gmail.com>"]
 edition = "2021"
 
