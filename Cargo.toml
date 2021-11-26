@@ -3,7 +3,7 @@ name = "surf-middleware-cache"
 description = "A caching middleware for Surf"
 version = "0.1.0"
 authors = ["Kat Marchán <kzm@zkat.tech>", "Christian Haynes <06chaynes@gmail.com>"]
-edition = "2021"
+edition = "2018"
 
 [dependencies]
 bincode = { version = "1.3.3", optional = true }
