@@ -6,6 +6,21 @@ A caching middleware for Surf.
 
 Ships with [cacache](https://github.com/zkat/cacache-rs) as the default manager.
 
+## Install
+
+Cargo.toml
+
+```toml
+[dependencies]
+surf-middleware-cache = "0.1.0"
+```
+
+With [cargo add](https://github.com/killercup/cargo-edit#Installation) installed :
+
+```sh
+cargo add surf-middleware-cache
+```
+
 ## Example
 
 ```rust
