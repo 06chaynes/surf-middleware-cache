@@ -1,7 +1,10 @@
 use std::{str::FromStr, time::SystemTime};
 
 use http_cache_semantics::{AfterResponse, BeforeRequest, CachePolicy};
-use http_types::{headers::HeaderValue, Method};
+use http_types::{
+    headers::{HeaderValue, CACHE_CONTROL},
+    Method,
+};
 use surf::{
     middleware::{Middleware, Next},
     Client, Request, Response,
@@ -44,7 +47,7 @@ pub struct Cache<T: CacheManager> {
 impl<T: CacheManager> Cache<T> {
     pub async fn run(
         &self,
-        req: Request,
+        mut req: Request,
         client: Client,
         next: Next<'_>,
     ) -> Result<Response, http_types::Error> {
@@ -76,6 +79,11 @@ impl<T: CacheManager> Cache<T> {
             }
 
             if self.mode == CacheMode::Default {
+                Ok(self
+                    .conditional_fetch(req, res, policy, client, next)
+                    .await?)
+            } else if self.mode == CacheMode::NoCache {
+                req.insert_header(CACHE_CONTROL.as_str(), "no-cache");
                 Ok(self
                     .conditional_fetch(req, res, policy, client, next)
                     .await?)
@@ -231,7 +239,7 @@ impl<T: CacheManager> Cache<T> {
 }
 
 fn must_revalidate(res: &Response) -> bool {
-    if let Some(val) = res.header("Cache-Control") {
+    if let Some(val) = res.header(CACHE_CONTROL.as_str()) {
         val.as_str().to_lowercase().contains("must-revalidate")
     } else {
         false
