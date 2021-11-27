@@ -3,6 +3,15 @@ name = "surf-middleware-cache"
 description = "A caching middleware for Surf"
 version = "0.1.0"
 authors = ["Kat Marchán <kzm@zkat.tech>", "Christian Haynes <06chaynes@gmail.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/06chaynes/surf-middleware-cache"
+homepage = "https://github.com/06chaynes/surf-middleware-cache"
+readme = "README.md"
+keywords = ["cache", "surf", "middleware"]
+categories = [
+    "caching",
+    "web-programming"
+]
 edition = "2018"
 
 [dependencies]
