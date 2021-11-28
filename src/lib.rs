@@ -3,7 +3,7 @@
 //! 
 //! ## Example
 //!
-//! ```rust
+//! ```no_run
 //! use surf_middleware_cache::{managers::CACacheManager, Cache, CacheMode};
 //!
 //! #[async_std::main]
