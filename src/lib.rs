@@ -1,3 +1,26 @@
+//! A caching middleware for Surf that follows HTTP caching rules. 
+//! By default it uses [`cacache`](https://github.com/zkat/cacache-rs) as the backend cache manager.
+//! 
+//! ## Example
+//!
+//! ```rust
+//! use surf_middleware_cache::{managers::CACacheManager, Cache, CacheMode};
+//!
+//! #[async_std::main]
+//! async fn main() -> surf::Result<()> {
+//!     let req = surf::get("https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching");
+//!     surf::client()
+//!         .with(Cache {
+//!             mode: CacheMode::Default,
+//!             cache_manager: CACacheManager::default(),
+//!         })
+//!         .send(req)
+//!         .await?;
+//!     Ok(())
+//! }
+//! ```
+#![warn(missing_docs, missing_doc_code_examples)]
+
 use std::{str::FromStr, time::SystemTime};
 
 use http_cache_semantics::{AfterResponse, BeforeRequest, CachePolicy};
@@ -10,41 +33,71 @@ use surf::{
     Client, Request, Response,
 };
 
+/// Backend cache managers, cacache is the default.
 pub mod managers;
 
+/// A trait providing methods for storing, reading, and removing cache records.
 #[surf::utils::async_trait]
 pub trait CacheManager {
+    /// Attempts to pull a cached reponse and related policy from cache.
     async fn get(
         &self,
         req: &Request,
     ) -> Result<Option<(Response, CachePolicy)>, http_types::Error>;
+    /// Attempts to cache a response and related policy.
     async fn put(
         &self,
         req: &Request,
         res: &mut Response,
         policy: CachePolicy,
     ) -> Result<Response, http_types::Error>;
+    /// Attempts to remove a record from cache.
     async fn delete(&self, req: &Request) -> Result<(), http_types::Error>;
 }
 
+/// Similar to [make-fetch-happen cache options](https://github.com/npm/make-fetch-happen#--optscache).
+/// Passed in when the Cache struct is being built.
 #[derive(Debug, PartialEq, Eq)]
 pub enum CacheMode {
+    /// Will inspect the HTTP cache on the way to the network. 
+    /// If there is a fresh response it will be used. 
+    /// If there is a stale response a conditional request will be created, 
+    /// and a normal request otherwise. 
+    /// It then updates the HTTP cache with the response. 
+    /// If the revalidation request fails (for example, on a 500 or if you're offline), 
+    /// the stale response will be returned.
     Default,
+    /// Behaves as if there is no HTTP cache at all.
     NoStore,
+    /// Behaves as if there is no HTTP cache on the way to the network. 
+    /// Ergo, it creates a normal request and updates the HTTP cache with the response.
     Reload,
+    /// Creates a conditional request if there is a response in the HTTP cache 
+    /// and a normal request otherwise. It then updates the HTTP cache with the response.
     NoCache,
+    /// Uses any response in the HTTP cache matching the request, 
+    /// not paying attention to staleness. If there was no response, 
+    /// it creates a normal request and updates the HTTP cache with the response.
     ForceCache,
+    /// Uses any response in the HTTP cache matching the request, 
+    /// not paying attention to staleness. If there was no response, 
+    /// it returns a network error. (Can only be used when request’s mode is "same-origin". 
+    /// Any cached redirects will be followed assuming request’s redirect mode is "follow" 
+    /// and the redirects do not violate request’s mode.)
     OnlyIfCached,
 }
 
 /// Caches requests according to http spec
 #[derive(Debug)]
 pub struct Cache<T: CacheManager> {
+    /// Determines the manager behavior
     pub mode: CacheMode,
+    /// Manager instance that implements the CacheManager trait
     pub cache_manager: T,
 }
 
 impl<T: CacheManager> Cache<T> {
+    /// Called by the Surf middleware handle method when a request is made.
     pub async fn run(
         &self,
         mut req: Request,
@@ -284,7 +337,7 @@ fn update_response_headers(
 }
 
 // Convert the surf::Response for CachePolicy to use
-pub fn get_response_parts(res: &Response) -> http::response::Parts {
+fn get_response_parts(res: &Response) -> http::response::Parts {
     let mut headers = http::HeaderMap::new();
     for header in res.iter() {
         headers.insert(
@@ -302,7 +355,7 @@ pub fn get_response_parts(res: &Response) -> http::response::Parts {
 }
 
 // Convert the surf::Request for CachePolicy to use
-pub fn get_request_parts(req: &Request) -> http::request::Parts {
+fn get_request_parts(req: &Request) -> http::request::Parts {
     let mut headers = http::HeaderMap::new();
     for header in req.iter() {
         headers.insert(
