@@ -19,7 +19,7 @@
 //!     Ok(())
 //! }
 //! ```
-#![warn(missing_docs, missing_doc_code_examples)]
+#![warn(missing_docs, rustdoc::missing_doc_code_examples)]
 
 use std::{str::FromStr, time::SystemTime};
 
