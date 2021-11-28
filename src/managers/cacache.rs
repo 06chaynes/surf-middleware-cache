@@ -8,7 +8,9 @@ use surf::{Request, Response};
 
 type Result<T> = std::result::Result<T, http_types::Error>;
 
+/// Implements `CacheManager` with [`cacache`](https://github.com/zkat/cacache-rs) as the backend.
 pub struct CACacheManager {
+    /// Directory where the cache will be stored.
     pub path: String,
 }
 
@@ -61,6 +63,7 @@ fn req_key(req: &Request) -> String {
 
 #[allow(dead_code)]
 impl CACacheManager {
+    /// Clears out the entire cache.
     pub async fn clear(&self) -> Result<()> {
         cacache::clear(&self.path).await?;
         Ok(())
