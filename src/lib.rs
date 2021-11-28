@@ -1,6 +1,14 @@
-//! A caching middleware for Surf that follows HTTP caching rules. 
+#![forbid(unsafe_code, future_incompatible)]
+#![deny(
+    missing_docs,
+    missing_debug_implementations,
+    nonstandard_style,
+    unused_qualifications,
+    rustdoc::missing_doc_code_examples
+)]
+//! A caching middleware for Surf that follows HTTP caching rules.
 //! By default it uses [`cacache`](https://github.com/zkat/cacache-rs) as the backend cache manager.
-//! 
+//!
 //! ## Example
 //!
 //! ```no_run
@@ -19,7 +27,6 @@
 //!     Ok(())
 //! }
 //! ```
-#![warn(missing_docs, rustdoc::missing_doc_code_examples)]
 
 use std::{str::FromStr, time::SystemTime};
 
@@ -59,30 +66,30 @@ pub trait CacheManager {
 /// Passed in when the [`Cache`] struct is being built.
 #[derive(Debug, PartialEq, Eq)]
 pub enum CacheMode {
-    /// Will inspect the HTTP cache on the way to the network. 
-    /// If there is a fresh response it will be used. 
-    /// If there is a stale response a conditional request will be created, 
-    /// and a normal request otherwise. 
-    /// It then updates the HTTP cache with the response. 
-    /// If the revalidation request fails (for example, on a 500 or if you're offline), 
+    /// Will inspect the HTTP cache on the way to the network.
+    /// If there is a fresh response it will be used.
+    /// If there is a stale response a conditional request will be created,
+    /// and a normal request otherwise.
+    /// It then updates the HTTP cache with the response.
+    /// If the revalidation request fails (for example, on a 500 or if you're offline),
     /// the stale response will be returned.
     Default,
     /// Behaves as if there is no HTTP cache at all.
     NoStore,
-    /// Behaves as if there is no HTTP cache on the way to the network. 
+    /// Behaves as if there is no HTTP cache on the way to the network.
     /// Ergo, it creates a normal request and updates the HTTP cache with the response.
     Reload,
-    /// Creates a conditional request if there is a response in the HTTP cache 
+    /// Creates a conditional request if there is a response in the HTTP cache
     /// and a normal request otherwise. It then updates the HTTP cache with the response.
     NoCache,
-    /// Uses any response in the HTTP cache matching the request, 
-    /// not paying attention to staleness. If there was no response, 
+    /// Uses any response in the HTTP cache matching the request,
+    /// not paying attention to staleness. If there was no response,
     /// it creates a normal request and updates the HTTP cache with the response.
     ForceCache,
-    /// Uses any response in the HTTP cache matching the request, 
-    /// not paying attention to staleness. If there was no response, 
-    /// it returns a network error. (Can only be used when request’s mode is "same-origin". 
-    /// Any cached redirects will be followed assuming request’s redirect mode is "follow" 
+    /// Uses any response in the HTTP cache matching the request,
+    /// not paying attention to staleness. If there was no response,
+    /// it returns a network error. (Can only be used when request’s mode is "same-origin".
+    /// Any cached redirects will be followed assuming request’s redirect mode is "follow"
     /// and the redirects do not violate request’s mode.)
     OnlyIfCached,
 }
