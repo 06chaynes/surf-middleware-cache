@@ -9,7 +9,7 @@ use surf::{Request, Response};
 type Result<T> = std::result::Result<T, http_types::Error>;
 
 /// Implements [`CacheManager`] with [`cacache`](https://github.com/zkat/cacache-rs) as the backend.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CACacheManager {
     /// Directory where the cache will be stored.
     pub path: String,
