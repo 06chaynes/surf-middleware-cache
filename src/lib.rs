@@ -2,6 +2,7 @@
 #![deny(
     missing_docs,
     missing_debug_implementations,
+    missing_copy_implementations,
     nonstandard_style,
     unused_qualifications,
     rustdoc::missing_doc_code_examples
@@ -64,7 +65,7 @@ pub trait CacheManager {
 
 /// Similar to [make-fetch-happen cache options](https://github.com/npm/make-fetch-happen#--optscache).
 /// Passed in when the [`Cache`] struct is being built.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheMode {
     /// Will inspect the HTTP cache on the way to the network.
     /// If there is a fresh response it will be used.
@@ -95,7 +96,7 @@ pub enum CacheMode {
 }
 
 /// Caches requests according to http spec
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Cache<T: CacheManager> {
     /// Determines the manager behavior
     pub mode: CacheMode,
