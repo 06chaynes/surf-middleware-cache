@@ -2,9 +2,7 @@
 
 [![Rust](https://github.com/06chaynes/surf-middleware-cache/actions/workflows/rust.yml/badge.svg)](https://github.com/06chaynes/surf-middleware-cache/actions/workflows/rust.yml) ![crates.io](https://img.shields.io/crates/v/surf-middleware-cache.svg)
 
-A caching middleware for Surf.
-
-Ships with [cacache](https://github.com/zkat/cacache-rs) as the default manager.
+A caching middleware for [Surf](https://github.com/http-rs/surf) that follows HTTP caching rules, thanks to [http-cache-semantics](https://github.com/kornelski/rusty-http-cache-semantics). By default it uses [cacache](https://github.com/zkat/cacache-rs) as the backend cache manager.
 
 ## Install
 
@@ -12,7 +10,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-surf-middleware-cache = "0.2.0"
+surf-middleware-cache = "0.2.1"
 ```
 
 With [cargo add](https://github.com/killercup/cargo-edit#Installation) installed :
