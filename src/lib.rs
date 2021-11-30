@@ -431,7 +431,8 @@ mod tests {
         let mut res = surf::Response::from(Response::new(StatusCode::Ok));
         add_warning(&mut res, &url, 111, "Revalidation failed");
         let code = get_warning_code(&res).unwrap();
-        Ok(assert_eq!(code, 111))
+        assert_eq!(code, 111);
+        Ok(())
     }
 
     #[async_std::test]
@@ -439,6 +440,6 @@ mod tests {
         let mut res = Response::new(StatusCode::Ok);
         res.append_header("Cache-Control", "max-age=1733992, must-revalidate");
         let check = must_revalidate(&res.into());
-        assert_eq!(check, true)
+        assert!(check, "{}", true)
     }
 }
