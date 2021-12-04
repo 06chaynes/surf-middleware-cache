@@ -1,12 +1,3 @@
-#![forbid(unsafe_code, future_incompatible)]
-#![deny(
-    missing_docs,
-    missing_debug_implementations,
-    missing_copy_implementations,
-    nonstandard_style,
-    unused_qualifications,
-    rustdoc::missing_doc_code_examples
-)]
 //! A caching middleware for Surf that follows HTTP caching rules.
 //! By default it uses [`cacache`](https://github.com/zkat/cacache-rs) as the backend cache manager.
 //!
@@ -28,7 +19,15 @@
 //!     Ok(())
 //! }
 //! ```
-
+#![forbid(unsafe_code, future_incompatible)]
+#![deny(
+    missing_docs,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    nonstandard_style,
+    unused_qualifications,
+    rustdoc::missing_doc_code_examples
+)]
 use std::{str::FromStr, time::SystemTime};
 
 use http_cache_semantics::{AfterResponse, BeforeRequest, CachePolicy};
@@ -139,31 +138,35 @@ impl<T: CacheManager> Cache<T> {
                 }
             }
 
-            if self.mode == CacheMode::Default {
-                Ok(self
+            match self.mode {
+                CacheMode::Default => Ok(self
                     .conditional_fetch(req, res, policy, client, next)
-                    .await?)
-            } else if self.mode == CacheMode::NoCache {
-                req.insert_header(CACHE_CONTROL.as_str(), "no-cache");
-                Ok(self
-                    .conditional_fetch(req, res, policy, client, next)
-                    .await?)
-            } else if self.mode == CacheMode::ForceCache || self.mode == CacheMode::OnlyIfCached {
-                //   112 Disconnected operation
-                // SHOULD be included if the cache is intentionally disconnected from
-                // the rest of the network for a period of time.
-                // (https://tools.ietf.org/html/rfc2616#section-14.46)
-                add_warning(&mut res, req.url(), 112, "Disconnected operation");
-                Ok(res)
-            } else {
-                Ok(self.remote_fetch(req, client, next).await?)
+                    .await?),
+                CacheMode::NoCache => {
+                    req.insert_header(CACHE_CONTROL.as_str(), "no-cache");
+                    Ok(self
+                        .conditional_fetch(req, res, policy, client, next)
+                        .await?)
+                }
+                CacheMode::ForceCache | CacheMode::OnlyIfCached => {
+                    //   112 Disconnected operation
+                    // SHOULD be included if the cache is intentionally disconnected from
+                    // the rest of the network for a period of time.
+                    // (https://tools.ietf.org/html/rfc2616#section-14.46)
+                    add_warning(&mut res, req.url(), 112, "Disconnected operation");
+                    Ok(res)
+                }
+                _ => Ok(self.remote_fetch(req, client, next).await?),
             }
-        } else if self.mode == CacheMode::OnlyIfCached {
-            // ENOTCACHED
-            let err_res = http_types::Response::new(http_types::StatusCode::GatewayTimeout);
-            Ok(err_res.into())
         } else {
-            Ok(self.remote_fetch(req, client, next).await?)
+            match self.mode {
+                CacheMode::OnlyIfCached => {
+                    // ENOTCACHED
+                    let err_res = http_types::Response::new(http_types::StatusCode::GatewayTimeout);
+                    Ok(err_res.into())
+                }
+                _ => Ok(self.remote_fetch(req, client, next).await?),
+            }
         }
     }
 
