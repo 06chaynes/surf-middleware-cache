@@ -1,7 +1,7 @@
 [package]
 name = "surf-middleware-cache"
 description = "A caching middleware for Surf"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Kat Marchán <kzm@zkat.tech>", "Christian Haynes <06chaynes@gmail.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/06chaynes/surf-middleware-cache"
@@ -22,7 +22,6 @@ httpdate = "1.0"
 http-cache-semantics = "0.9"
 http-types = "2.12"
 serde = { version = "1.0", features = ["derive"], optional = true }
-serde_json = "1.0"
 surf = "2.3"
 
 [dev-dependencies]

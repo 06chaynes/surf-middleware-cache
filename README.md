@@ -10,7 +10,7 @@ Cargo.toml
 
 ```toml
 [dependencies]
-surf-middleware-cache = "0.2.1"
+surf-middleware-cache = "0.2.2"
 ```
 
 With [cargo add](https://github.com/killercup/cargo-edit#Installation) installed :
