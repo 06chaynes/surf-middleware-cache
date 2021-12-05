@@ -10,7 +10,7 @@ readme = "README.md"
 keywords = ["cache", "surf", "middleware"]
 categories = [
     "caching",
-    "web-programming"
+    "web-programming::http-client"
 ]
 edition = "2018"
 
