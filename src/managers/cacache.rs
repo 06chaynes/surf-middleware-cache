@@ -1,12 +1,10 @@
 use std::collections::HashMap;
 
-use crate::CacheManager;
+use crate::{CacheManager, Result};
 
 use http_cache_semantics::CachePolicy;
 use serde::{Deserialize, Serialize};
 use surf::{Request, Response};
-
-type Result<T> = std::result::Result<T, http_types::Error>;
 
 /// Implements [`CacheManager`] with [`cacache`](https://github.com/zkat/cacache-rs) as the backend.
 #[derive(Debug, Clone)]
@@ -122,7 +120,7 @@ mod tests {
         res.set_body("test");
         let mut res = surf::Response::from(res);
         let req = Request::new(Method::Get, url);
-        let policy = CachePolicy::new(&get_request_parts(&req), &get_response_parts(&res));
+        let policy = CachePolicy::new(&get_request_parts(&req)?, &get_response_parts(&res)?);
         let manager = CACacheManager::default();
         manager.put(&req, &mut res, policy).await?;
         let data = manager.get(&req).await?;

@@ -43,23 +43,18 @@ use surf::{
 /// Backend cache managers, cacache is the default.
 pub mod managers;
 
+type Result<T> = std::result::Result<T, http_types::Error>;
+
 /// A trait providing methods for storing, reading, and removing cache records.
 #[surf::utils::async_trait]
 pub trait CacheManager {
     /// Attempts to pull a cached reponse and related policy from cache.
-    async fn get(
-        &self,
-        req: &Request,
-    ) -> Result<Option<(Response, CachePolicy)>, http_types::Error>;
+    async fn get(&self, req: &Request) -> Result<Option<(Response, CachePolicy)>>;
     /// Attempts to cache a response and related policy.
-    async fn put(
-        &self,
-        req: &Request,
-        res: &mut Response,
-        policy: CachePolicy,
-    ) -> Result<Response, http_types::Error>;
+    async fn put(&self, req: &Request, res: &mut Response, policy: CachePolicy)
+        -> Result<Response>;
     /// Attempts to remove a record from cache.
-    async fn delete(&self, req: &Request) -> Result<(), http_types::Error>;
+    async fn delete(&self, req: &Request) -> Result<()>;
 }
 
 /// Similar to [make-fetch-happen cache options](https://github.com/npm/make-fetch-happen#--optscache).
@@ -105,12 +100,7 @@ pub struct Cache<T: CacheManager> {
 
 impl<T: CacheManager> Cache<T> {
     /// Called by the Surf middleware handle method when a request is made.
-    pub async fn run(
-        &self,
-        mut req: Request,
-        client: Client,
-        next: Next<'_>,
-    ) -> Result<Response, http_types::Error> {
+    pub async fn run(&self, mut req: Request, client: Client, next: Next<'_>) -> Result<Response> {
         let is_cacheable = (req.method() == Method::Get || req.method() == Method::Head)
             && self.mode != CacheMode::NoStore
             && self.mode != CacheMode::Reload;
@@ -177,8 +167,8 @@ impl<T: CacheManager> Cache<T> {
         mut policy: CachePolicy,
         client: Client,
         next: Next<'_>,
-    ) -> Result<Response, http_types::Error> {
-        let before_req = policy.before_request(&get_request_parts(&req), SystemTime::now());
+    ) -> Result<Response> {
+        let before_req = policy.before_request(&get_request_parts(&req)?, SystemTime::now());
         match before_req {
             BeforeRequest::Fresh(parts) => {
                 update_response_headers(parts, &mut cached_res)?;
@@ -217,8 +207,8 @@ impl<T: CacheManager> Cache<T> {
                     res.set_body(cached_res.body_string().await?);
                     let mut converted = Response::from(res);
                     let after_res = policy.after_response(
-                        &get_request_parts(&copied_req),
-                        &get_response_parts(&cond_res),
+                        &get_request_parts(&copied_req)?,
+                        &get_response_parts(&cond_res)?,
                         SystemTime::now(),
                     );
                     match after_res {
@@ -273,17 +263,12 @@ impl<T: CacheManager> Cache<T> {
         }
     }
 
-    async fn remote_fetch(
-        &self,
-        req: Request,
-        client: Client,
-        next: Next<'_>,
-    ) -> Result<Response, http_types::Error> {
+    async fn remote_fetch(&self, req: Request, client: Client, next: Next<'_>) -> Result<Response> {
         let copied_req = req.clone();
         let mut res = next.run(req, client).await?;
         let is_method_get_head =
             copied_req.method() == Method::Get || copied_req.method() == Method::Head;
-        let policy = CachePolicy::new(&get_request_parts(&copied_req), &get_response_parts(&res));
+        let policy = CachePolicy::new(&get_request_parts(&copied_req)?, &get_response_parts(&res)?);
         let is_cacheable = self.mode != CacheMode::NoStore
             && is_method_get_head
             && res.status() == http_types::StatusCode::Ok
@@ -321,10 +306,7 @@ fn get_warning_code(res: &Response) -> Option<usize> {
     })
 }
 
-fn update_request_headers(
-    parts: http::request::Parts,
-    req: &mut Request,
-) -> Result<(), http_types::Error> {
+fn update_request_headers(parts: http::request::Parts, req: &mut Request) -> Result<()> {
     for header in parts.headers.iter() {
         req.set_header(
             header.0.as_str(),
@@ -334,10 +316,7 @@ fn update_request_headers(
     Ok(())
 }
 
-fn update_response_headers(
-    parts: http::response::Parts,
-    res: &mut Response,
-) -> Result<(), http_types::Error> {
+fn update_response_headers(parts: http::response::Parts, res: &mut Response) -> Result<()> {
     for header in parts.headers.iter() {
         res.insert_header(
             header.0.as_str(),
@@ -348,40 +327,39 @@ fn update_response_headers(
 }
 
 // Convert the surf::Response for CachePolicy to use
-fn get_response_parts(res: &Response) -> http::response::Parts {
+fn get_response_parts(res: &Response) -> Result<http::response::Parts> {
     let mut headers = http::HeaderMap::new();
     for header in res.iter() {
         headers.insert(
-            http::header::HeaderName::from_str(header.0.as_str()).expect("Invalid header name"),
-            http::HeaderValue::from_str(header.1.as_str()).expect("Invalid header value"),
+            http::header::HeaderName::from_str(header.0.as_str())?,
+            http::HeaderValue::from_str(header.1.as_str())?,
         );
     }
-    let status =
-        http::StatusCode::from_str(res.status().to_string().as_ref()).expect("Invalid status code");
+    let status = http::StatusCode::from_str(res.status().to_string().as_ref())?;
     let mut converted = http::response::Response::new(());
     converted.headers_mut().clone_from(&headers);
     converted.status_mut().clone_from(&status);
     let parts = converted.into_parts();
-    parts.0
+    Ok(parts.0)
 }
 
 // Convert the surf::Request for CachePolicy to use
-fn get_request_parts(req: &Request) -> http::request::Parts {
+fn get_request_parts(req: &Request) -> Result<http::request::Parts> {
     let mut headers = http::HeaderMap::new();
     for header in req.iter() {
         headers.insert(
-            http::header::HeaderName::from_str(header.0.as_str()).expect("Invalid header name"),
-            http::HeaderValue::from_str(header.1.as_str()).expect("Invalid header value"),
+            http::header::HeaderName::from_str(header.0.as_str())?,
+            http::HeaderValue::from_str(header.1.as_str())?,
         );
     }
-    let uri = http::Uri::from_str(req.url().as_str()).expect("Invalid request uri");
-    let method = http::Method::from_str(req.method().as_ref()).expect("Invalid request method");
+    let uri = http::Uri::from_str(req.url().as_str())?;
+    let method = http::Method::from_str(req.method().as_ref())?;
     let mut converted = http::request::Request::new(());
     converted.headers_mut().clone_from(&headers);
     converted.uri_mut().clone_from(&uri);
     converted.method_mut().clone_from(&method);
     let parts = converted.into_parts();
-    parts.0
+    Ok(parts.0)
 }
 
 fn add_warning(res: &mut Response, uri: &surf::http::Url, code: usize, message: &str) {
@@ -411,12 +389,7 @@ fn add_warning(res: &mut Response, uri: &surf::http::Url, code: usize, message: 
 
 #[surf::utils::async_trait]
 impl<T: CacheManager + 'static + Send + Sync> Middleware for Cache<T> {
-    async fn handle(
-        &self,
-        req: Request,
-        client: Client,
-        next: Next<'_>,
-    ) -> Result<Response, http_types::Error> {
+    async fn handle(&self, req: Request, client: Client, next: Next<'_>) -> Result<Response> {
         let res = self.run(req, client, next).await?;
         Ok(res)
     }
