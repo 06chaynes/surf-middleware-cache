@@ -109,6 +109,7 @@ impl CacheManager for CACacheManager {
         for header in res.iter() {
             ret_res.insert_header(header.0, header.1);
         }
+        ret_res.set_status(res.status());
         ret_res.set_version(res.version());
         Ok(Response::from(ret_res))
     }
