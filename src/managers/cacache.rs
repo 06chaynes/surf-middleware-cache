@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 use crate::{CacheManager, Result};
 
 use http_cache_semantics::CachePolicy;
+use http_types::Version;
 use serde::{Deserialize, Serialize};
 use surf::{Request, Response};
 
@@ -31,6 +33,8 @@ struct Store {
 struct StoredResponse {
     body: Vec<u8>,
     headers: HashMap<String, String>,
+    status: u16,
+    version: Version,
 }
 
 async fn to_store(res: &mut Response, policy: CachePolicy) -> Result<Store> {
@@ -38,22 +42,31 @@ async fn to_store(res: &mut Response, policy: CachePolicy) -> Result<Store> {
     for header in res.iter() {
         headers.insert(header.0.as_str().to_owned(), header.1.as_str().to_owned());
     }
+    let status = res.status().into();
+    let version = res.version().unwrap_or(Version::Http1_1);
     let body: Vec<u8> = res.body_bytes().await?;
     Ok(Store {
-        response: StoredResponse { body, headers },
+        response: StoredResponse {
+            body,
+            headers,
+            status,
+            version,
+        },
         policy,
     })
 }
 
-fn from_store(store: &Store) -> Response {
+fn from_store(store: &Store) -> Result<Response> {
     let mut res = http_types::Response::new(http_types::StatusCode::Ok);
     for header in &store.response.headers {
         let val =
             http_types::headers::HeaderValue::from_bytes(header.1.as_bytes().to_vec()).unwrap();
         res.insert_header(header.0.as_str(), val);
     }
+    res.set_status(store.response.status.try_into()?);
+    res.set_version(Some(store.response.version));
     res.set_body(store.response.body.clone());
-    Response::from(res)
+    Ok(Response::from(res))
 }
 
 fn req_key(req: &Request) -> String {
@@ -78,7 +91,7 @@ impl CacheManager for CACacheManager {
                 return Ok(None);
             }
         };
-        Ok(Some((from_store(&store), store.policy)))
+        Ok(Some((from_store(&store)?, store.policy)))
     }
 
     // TODO - This needs some reviewing.

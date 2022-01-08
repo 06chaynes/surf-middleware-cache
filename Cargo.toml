@@ -1,7 +1,7 @@
 [package]
 name = "surf-middleware-cache"
 description = "A caching middleware for Surf"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Kat Marchán <kzm@zkat.tech>", "Christian Haynes <06chaynes@gmail.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/06chaynes/surf-middleware-cache"

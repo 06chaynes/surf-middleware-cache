@@ -8,13 +8,6 @@ A caching middleware for [Surf](https://github.com/http-rs/surf) that follows HT
 
 ## Install
 
-Cargo.toml
-
-```toml
-[dependencies]
-surf-middleware-cache = "0.2.2"
-```
-
 With [cargo add](https://github.com/killercup/cargo-edit#Installation) installed :
 
 ```sh
