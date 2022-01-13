@@ -1,5 +1,7 @@
 # surf-middleware-cache
 
+> **NOTE**: This crate is deprecated in favor of [`http-cache`](https://github.com/06chaynes/http-cache).
+
 [![Rust](https://github.com/06chaynes/surf-middleware-cache/actions/workflows/rust.yml/badge.svg)](https://github.com/06chaynes/surf-middleware-cache/actions/workflows/rust.yml)
 ![crates.io](https://img.shields.io/crates/v/surf-middleware-cache.svg)
 [![Docs.rs](https://docs.rs/surf-middleware-cache/badge.svg)](https://docs.rs/surf-middleware-cache)
